@@ -3,8 +3,9 @@
 Technical stewardship for communities, farms and households: make useful systems
 straightforward to choose, operate and hand over.
 
-**Early development.** The first code implements onboarding recommendations. It
-does not install applications, monitor hardware or grant an agent control.
+**Early development.** The project includes onboarding recommendations and a verified isolated
+Stackarr/Hermes/Jellyfin integration journey. It is not yet a community appliance
+or a production management agent.
 
 ## Product priorities
 
@@ -26,8 +27,8 @@ change. Open source supports inspection and collaboration, not a safety guarante
 Knowledge Steward is an independent application alongside farmOS, Project NOMAD
 and other specialist tools. The Lab helps operate systems; each application keeps
 its own records and decision authority. Hermes and Stackarr are intended reusable
-components, not required replacements for every existing tool. No integration is
-claimed working in this repository yet.
+components, not required replacements for every existing tool. The first integration is deliberately limited to a disposable supported
+service; farmOS and Project NOMAD integrations remain future work.
 
 ## Run the first module
 
@@ -45,13 +46,18 @@ verified deployments. Actual options need assessed effort/cost and evidence from
 the intended installation. The evaluator trusts supplied assessment evidence;
 it does not independently verify that evidence or turn it into execution rights.
 
-## Next integration
+## Working integration proof
 
-Prove one actual supported disposable service journey using a pinned management
-runtime: observe, scoped consent, operation, independent read-back and application
-data recovery. Reuse upstream fixes and interfaces before building replacements.
-Keep deployment credentials, private records and production resources outside this
-repository. A repository is where the project is developed, not a server deployment.
+The [isolated integration](integrations/stackarr/README.md) exercises actual
+Stackarr operations, the repaired Hermes consent handler, ten refusal cases and
+Jellyfin application-data recovery. [Recorded result](docs/integration-result.md):
+22 journey checks passed, including rollback; 17 focused review regressions and
+12 onboarding tests also pass.
+
+Approval inputs in that journey are automated test decisions, not human or
+conversational-agent acceptance. No model provider, production host or private
+records are involved. Knowledge Steward remains independently useful beside the
+other applications. A repository is the code home; deployment is separate.
 
 ## Licence
 
