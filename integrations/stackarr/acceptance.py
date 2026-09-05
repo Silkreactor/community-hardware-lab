@@ -23,6 +23,7 @@ from urllib.error import HTTPError
 import wave
 
 from mcp_client import StackarrClient, payload
+from isolation import validate_isolation
 
 ROOT = Path(__file__).resolve().parents[2]
 RUNTIME = ROOT / '.runtime'
@@ -84,8 +85,7 @@ class Jellyfin:
 
 class Trial:
     def __init__(self, args):
-        if not args.docker_host.startswith('unix://') or args.docker_host == 'unix:///var/run/docker.sock':
-            raise ValueError('Provide the dedicated disposable VM socket; the default socket is refused')
+        self.isolation = validate_isolation(args.docker_host)
         self.docker = ['docker', '--host', args.docker_host]
         self.evidence = {'started': datetime.now(timezone.utc).isoformat(), 'checks': []}
         self.out = RUNTIME / ('acceptance-' + datetime.now(timezone.utc).strftime('%Y%m%dT%H%M%SZ'))
@@ -135,6 +135,7 @@ class Trial:
         return json.loads(self.run('inspect', name))[0]
 
     def guard(self, name):
+        validate_isolation(self.docker[2])
         item = self.inspect(name)
         if item['Id'] != self.ids[name] or item['Config']['Labels'].get('community-lab.trial') != 'true':
             raise RuntimeError('Target changed since preflight')

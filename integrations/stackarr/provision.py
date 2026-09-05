@@ -7,11 +7,11 @@ from pathlib import Path
 import subprocess
 
 from acceptance import STACKARR, JELLYFIN, RUNTIME
+from isolation import validate_isolation
 
 
 def provision(host):
-    if not host.startswith('unix://') or host == 'unix:///var/run/docker.sock':
-        raise ValueError('The dedicated VM socket is required; default socket refused')
+    validate_isolation(host)
     RUNTIME.mkdir(mode=0o700, exist_ok=True)
     config = RUNTIME / 'docker-config'
     config.mkdir(mode=0o700, exist_ok=True)
@@ -24,13 +24,6 @@ def provision(host):
         raise ValueError('Only the dedicated colima-lab Linux engine is allowed')
     if info['Containers'] or run('volume', 'ls', '-q'):
         raise ValueError('Engine is not empty; existing resources are preserved')
-    # Verify the actual Colima guest configuration before granting its socket.
-    lima = Path.home() / '.colima/_lima/colima-lab/lima.yaml'
-    if not lima.is_file():
-        raise ValueError('Cannot verify the dedicated Lima configuration')
-    text = lima.read_text()
-    if '\nmounts:' in text or 'forwardAgent: true' in text:
-        raise ValueError('Host mounts or forwarded agent are outside this trial')
     for image in (STACKARR, JELLYFIN):
         run('pull', image)
     label = ['--label', 'community-lab.trial=true']

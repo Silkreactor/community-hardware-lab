@@ -4,8 +4,48 @@ import json
 import os
 from pathlib import Path
 import queue
+import re
 import subprocess
 import threading
+
+
+def _unique_object(pairs):
+    result = {}
+    for key, value in pairs:
+        if key in result:
+            raise ValueError('Duplicate JSON key')
+        result[key] = value
+    return result
+
+
+class PendingApproval:
+    """One elicitation opportunity bound to one pending tools/call request."""
+    def __init__(self, tool, arguments):
+        self.tool = tool
+        self.arguments = json.dumps(arguments, sort_keys=True, allow_nan=False)
+        self.consumed = False
+
+    def take(self, form):
+        if self.consumed:
+            return False
+        # Consume even a malformed first attempt: the server cannot retry a
+        # different form using the same deterministic once-only test decision.
+        self.consumed = True
+        if not isinstance(form, dict) or form.get('mode') != 'form':
+            return False
+        message = form.get('message')
+        if not isinstance(message, str) or len(message) > 200:
+            return False
+        match = re.fullmatch(
+            r'Stackarr wants to run a destructive action\.\n\nTool: (stackarr_[a-z0-9_]+)'
+            r'\nCategory: containers\n\nArguments:\n(\{.*\})', message, re.DOTALL)
+        if not match or match[1] != self.tool:
+            return False
+        try:
+            arguments = json.loads(match[2], object_pairs_hook=_unique_object)
+            return isinstance(arguments, dict) and json.dumps(arguments, sort_keys=True, allow_nan=False) == self.arguments
+        except (ValueError, TypeError):
+            return False
 
 
 class StackarrClient:
@@ -15,7 +55,6 @@ class StackarrClient:
         self.counter = 0
         self.events = []
         self.choice = 'decline'
-        self.expected = None
         self.q = queue.Queue()
         self.log = (self.runtime / ('mcp-' + profile + '.log')).open('a')
         self.proc = subprocess.Popen(
@@ -48,6 +87,8 @@ class StackarrClient:
     def request(self, method, params):
         self.counter += 1
         request_id = self.counter
+        pending = PendingApproval(params['name'], params.get('arguments', {})) if method == 'tools/call' else None
+        choice = self.choice
         self.send({'jsonrpc': '2.0', 'id': request_id, 'method': method, 'params': params})
         while True:
             line = self.q.get(timeout=60)
@@ -56,13 +97,9 @@ class StackarrClient:
             message = json.loads(line)
             if message.get('method') == 'elicitation/create':
                 form = message['params']
-                # Match the exact action requested by this test before even asking
-                # the real Hermes consent handler to translate its once-only reply.
-                try:
-                    displayed = json.loads(form['message'].split('Arguments:\n', 1)[1])
-                    exact = displayed == self.expected
-                except (KeyError, ValueError, IndexError):
-                    exact = False
+                # Match pending tool AND arguments, with one non-reusable decision.
+                # The unchanged Hermes bridge also enforces the exact pinned schema.
+                exact = pending.take(form) if pending else False
                 answer = {'result': {'action': 'decline'}, 'shown': []}
                 if exact:
                     env = {k: os.environ[k] for k in ('PATH', 'LANG', 'TMPDIR') if k in os.environ}
@@ -70,7 +107,7 @@ class StackarrClient:
                     cmd = [str(self.runtime / 'venv/bin/python'), str(self.runtime / 'consent_bridge.py')]
                     if self.baseline:
                         cmd.append('--baseline')
-                    completed = subprocess.run(cmd, input=json.dumps({'params': form, 'choice': self.choice}),
+                    completed = subprocess.run(cmd, input=json.dumps({'params': form, 'choice': choice}),
                                                text=True, capture_output=True, check=True, timeout=10, env=env)
                     answer = json.loads(completed.stdout)
                 self.events.append({'form': form, 'exact_action': exact, 'answer': answer})
@@ -80,7 +117,6 @@ class StackarrClient:
 
     def call(self, name, arguments=None, *, choice='decline'):
         self.choice = choice
-        self.expected = arguments or {}
         return self.request('tools/call', {'name': name, 'arguments': arguments or {}})
 
     def close(self):

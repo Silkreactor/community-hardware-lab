@@ -31,6 +31,27 @@ Archive SHA-256 values from the successful run (archives remain private/local):
 - `config.tar`: `ec3560f624bcf5a01694751ac7386c42df1a77232c45a564b83ce57b440d18e8`
 - `media.tar`: `e75694480d4694cae198e562f76aef83af75db1b798ca64e4c353fa3f701de3d`
 
+## Substantive review corrections
+
+The reviewer found that the test client's first version compared arguments without
+binding the elicitation's tool name and could reuse one deterministic decision for
+repeated matching forms. It now parses the complete pinned message, binds tool and
+typed JSON arguments, and consumes one opportunity per pending request. Malformed,
+mismatched and replayed forms are declined. The reviewed Hermes bridge/patch bytes
+remain unchanged.
+
+The isolation guard now resolves the actual dedicated Unix socket and parses its
+paired Lima YAML with pinned PyYAML, rejecting duplicate keys, host mounts, agent
+forwarding and a mismatched socket forwarding record. Provisioning and acceptance
+share this guard; acceptance rechecks it before operations. Seventeen deterministic
+regression tests pass, including protocol replay and mocked positive provisioning.
+The actual guard and nonempty-engine refusal were also checked against the real VM.
+Mocked provision success is not a fresh VM installation claim.
+
+A complete fresh 22-check actual journey passed again from 2026-09-05T19:30:21.421227+00:00 to 2026-09-05T19:31:04.174493+00:00 UTC after
+these fixes. Its recovery archive SHA-256 values are 5b60a917ba7b9d14d516305f26be62e6a54dd1f86f354db6538530b23edf97b4 and 6192cf8e6b48b0018572bae17a81488fc27643a638325035117cf2a0a2981f79. Earlier
+successful and failed evidence remains retained; nothing was overwritten.
+
 ## Findings and limits
 
 Stackarr's `manage` profile does not permit container restart. The proof uses

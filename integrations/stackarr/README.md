@@ -78,16 +78,30 @@ the empty dedicated engine, creates only labelled trial resources, discovers its
 socket group, and never publishes a non-loopback port:
 
 ```sh
-python3 integrations/stackarr/provision.py --docker-host unix:///absolute/path/to/.colima/lab/docker.sock
+.runtime/venv/bin/python integrations/stackarr/provision.py --docker-host unix:///absolute/path/to/.colima/lab/docker.sock
 ```
 
 It reports the engine ID. Use that exact ID for the actual journey:
 
 ```sh
-python3 integrations/stackarr/acceptance.py \
+.runtime/venv/bin/python integrations/stackarr/acceptance.py \
   --docker-host unix:///absolute/path/to/.colima/lab/docker.sock \
   --engine-id THE_REPORTED_ENGINE_ID --run-disposable-trial
 ```
+
+Run the deterministic review regressions separately from the actual journey:
+
+```sh
+PYTHONPATH=integrations/stackarr .runtime/venv/bin/python -m unittest discover -s integrations/stackarr/tests -v
+```
+
+The shared guard resolves the actual dedicated socket, parses its paired Lima
+configuration with pinned PyYAML (duplicate keys refused), and checks the socket
+forwarding pair, absent host mounts and disabled SSH-agent/key forwarding.
+Acceptance rechecks that guard before operations to detect configuration drift.
+The protocol client binds the pinned form to both the pending tool name and exact
+JSON argument types, and consumes its one elicitation opportunity even on refusal.
+Repeated/mismatched forms cannot reuse that request's test approval.
 
 The client uses `admin` with only the `containers` group because Stackarr's
 `manage` profile cannot restart containers. The dedicated engine is the real

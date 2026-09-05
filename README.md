@@ -51,7 +51,8 @@ it does not independently verify that evidence or turn it into execution rights.
 The [isolated integration](integrations/stackarr/README.md) exercises actual
 Stackarr operations, the repaired Hermes consent handler, ten refusal cases and
 Jellyfin application-data recovery. [Recorded result](docs/integration-result.md):
-22 journey checks passed, including rollback; the 12 onboarding tests also pass.
+22 journey checks passed, including rollback; 17 focused review regressions and
+12 onboarding tests also pass.
 
 Approval inputs in that journey are automated test decisions, not human or
 conversational-agent acceptance. No model provider, production host or private
