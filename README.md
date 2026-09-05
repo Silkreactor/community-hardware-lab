@@ -55,4 +55,9 @@ repository. A repository is where the project is developed, not a server deploym
 
 ## Licence
 
-Open-source licence selection is pending. No third-party implementation is vendored.
+Original project code is licensed under **GPL-3.0-only**; see [LICENSE](LICENSE).
+Distributed modified versions must preserve the applicable GPL source and licence
+obligations. Private use and charging for support are allowed. This is GPL, not
+AGPL: network use alone does not trigger a source-distribution requirement.
+Existing compliant recipients retain their published licence grants.
+See [licence decision and provenance](docs/licence.md).

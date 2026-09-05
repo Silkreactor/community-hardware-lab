@@ -1,3 +1,4 @@
+# SPDX-License-Identifier: GPL-3.0-only
 """Resource-aware onboarding recommendations. Does not grant permissions or operate services."""
 import argparse
 import json
