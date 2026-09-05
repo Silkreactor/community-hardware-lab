@@ -1,0 +1,142 @@
+diff --git a/tools/approval.py b/tools/approval.py
+index 7464e8d..5534195 100644
+--- a/tools/approval.py
++++ b/tools/approval.py
+@@ -5700,6 +5700,7 @@ def request_elicitation_consent(
+     *,
+     timeout_seconds: int | None = None,
+     surface: str = "mcp-elicitation",
++    once_only: bool = False,
+ ) -> str:
+     """Route an MCP elicitation request to whichever approval surface owns
+     the active session and return a normalized result.
+@@ -5738,6 +5739,8 @@ def request_elicitation_consent(
+             "pattern_key": "mcp_elicitation",
+             "pattern_keys": ["mcp_elicitation"],
+         }
++        if once_only:
++            approval_data.update(allow_session=False, allow_permanent=False)
+         try:
+             decision = _await_gateway_decision(
+                 session_key, notify_cb, approval_data, surface=surface,
+@@ -5753,7 +5756,7 @@ def request_elicitation_consent(
+         if not decision.get("resolved"):
+             return "cancel"
+         choice = decision.get("choice")
+-        if choice in ("once", "session", "always"):
++        if choice == "once" or (not once_only and choice in ("session", "always")):
+             return "accept"
+         return "decline"
+ 
+@@ -5765,6 +5768,7 @@ def request_elicitation_consent(
+             description,
+             timeout_seconds=timeout_seconds,
+             allow_permanent=False,
++            **({"allow_session": False} if once_only else {}),
+         )
+     except Exception as exc:
+         logger.error(
+@@ -5772,7 +5776,7 @@ def request_elicitation_consent(
+         )
+         return "decline"
+ 
+-    if choice in ("once", "session", "always"):
++    if choice == "once" or (not once_only and choice in ("session", "always")):
+         return "accept"
+     if choice == "timeout":
+         # Prompt expired without a user response — mirror the gateway's
+diff --git a/tools/mcp_tool.py b/tools/mcp_tool.py
+index 658024e..7fda5a3 100644
+--- a/tools/mcp_tool.py
++++ b/tools/mcp_tool.py
+@@ -2199,6 +2199,46 @@ def _format_elicitation_schema_summary(schema: dict, server_name: str) -> str:
+     return "\n".join(lines)
+ 
+ 
++def _is_stackarr_confirmation_request(params, schema: dict) -> bool:
++    """Recognize the pinned, fully visible one-action boolean consent form.
++
++    This local compatibility boundary deliberately does not fill general forms.
++    Gateway text approvals truncate commands after 200 characters, so longer
++    requests cannot be translated safely until that display path is improved.
++    """
++    expected = {
++        "type": "object",
++        "properties": {
++            "approve": {
++                "type": "boolean",
++                "title": "Approve this action",
++                "description": "Enable only after reviewing the exact action and arguments above.",
++                "default": False,
++            }
++        },
++        "required": ["approve"],
++    }
++    if not isinstance(schema, dict) or schema != expected:
++        return False
++    if schema["properties"]["approve"]["default"] is not False:
++        return False
++    message = getattr(params, "message", None)
++    if getattr(params, "mode", None) != "form" or not isinstance(message, str) or len(message) > 200:
++        return False
++    match = re.fullmatch(
++        r"Stackarr wants to run a destructive action\.\n\nTool: stackarr_[a-z0-9_]+"
++        r"\nCategory: [a-z]+\n\nArguments:\n(\{.*\})",
++        message,
++        re.DOTALL,
++    )
++    if not match:
++        return False
++    try:
++        return isinstance(json.loads(match.group(1)), dict)
++    except (ValueError, TypeError):
++        return False
++
++
+ class ElicitationHandler:
+     """Handles ``elicitation/create`` requests for a single MCP server.
+ 
+@@ -2286,6 +2326,10 @@ class ElicitationHandler:
+             or {}
+         )
+         description = _format_elicitation_schema_summary(schema, self.server_name)
++        stackarr_confirmation = self.server_name == "stackarr"
++        if stackarr_confirmation and not _is_stackarr_confirmation_request(params, schema):
++            self.metrics["declined"] += 1
++            return ElicitResult(action="decline")
+ 
+         logger.info(
+             "MCP server '%s' elicitation request: %s",
+@@ -2319,6 +2363,7 @@ class ElicitationHandler:
+         # contextvars.Context.run so the gateway-platform detection in
+         # request_elicitation_consent picks up the right session.
+         captured = getattr(self.owner, "_pending_call_context", None) if self.owner else None
++        consent_options = {"once_only": True} if stackarr_confirmation else {}
+ 
+         def _invoke_consent() -> str:
+             if captured is None:
+@@ -2327,6 +2372,7 @@ class ElicitationHandler:
+                     description,
+                     timeout_seconds=int(self.timeout),
+                     surface=f"mcp-elicitation/{self.server_name}",
++                    **consent_options,
+                 )
+             # Context.run can only execute a context once — copy to allow
+             # multiple elicitations within a single tool call.
+@@ -2336,6 +2382,7 @@ class ElicitationHandler:
+                 description,
+                 timeout_seconds=int(self.timeout),
+                 surface=f"mcp-elicitation/{self.server_name}",
++                **consent_options,
+             )
+ 
+         try:
+@@ -2360,7 +2407,7 @@ class ElicitationHandler:
+ 
+         if answer == "accept":
+             self.metrics["accepted"] += 1
+-            return ElicitResult(action="accept", content={})
++            return ElicitResult(action="accept", content={"approve": True} if stackarr_confirmation else {})
+         if answer == "cancel":
+             self.metrics["errors"] += 1
+             return ElicitResult(action="cancel")
