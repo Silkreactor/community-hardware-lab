@@ -1,0 +1,11 @@
+{
+  "skill": "beginner",
+  "setup_eur": 200,
+  "monthly_eur": 15,
+  "learning_hours": 3,
+  "minutes_per_week": 30,
+  "preference": "minimal_effort",
+  "data_preference": "cloud_allowed",
+  "impact": "ordinary",
+  "acceptable_loss_eur": 20
+}

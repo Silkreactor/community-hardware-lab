@@ -1,0 +1,32 @@
+[
+  {
+    "id": "small-supported-example",
+    "name": "a small supported installation",
+    "mode": "minimal_effort",
+    "minimum_skill": "beginner",
+    "setup_eur": 150,
+    "monthly_eur": 10,
+    "learning_hours": 2,
+    "minutes_per_week": 15,
+    "local_operation_verified": false,
+    "routine_automation_verified": true,
+    "recovery_verified": true,
+    "evidence_kind": "example",
+    "evidence": "FICTIONAL EXAMPLE: invented costs and capabilities to demonstrate the algorithm, not a supported product or measured estimate."
+  },
+  {
+    "id": "local-learning-example",
+    "name": "a local installation with operator learning",
+    "mode": "learn",
+    "minimum_skill": "beginner",
+    "setup_eur": 500,
+    "monthly_eur": 10,
+    "learning_hours": 12,
+    "minutes_per_week": 60,
+    "local_operation_verified": true,
+    "routine_automation_verified": false,
+    "recovery_verified": true,
+    "evidence_kind": "example",
+    "evidence": "FICTIONAL EXAMPLE: no hardware recommendation, pricing evidence or actual offline/recovery acceptance."
+  }
+]
