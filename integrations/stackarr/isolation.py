@@ -23,9 +23,14 @@ def unique_mapping(loader, node, deep=False):
 UniqueSafeLoader.add_constructor(yaml.resolver.BaseResolver.DEFAULT_MAPPING_TAG, unique_mapping)
 
 
+def lab_socket_path():
+    """The one supported reference socket; no runtime discovery or adoption."""
+    return Path.home() / '.colima/lab/docker.sock'
+
+
 def validate_isolation(host):
     home = Path.home()
-    expected_socket = home / '.colima/lab/docker.sock'
+    expected_socket = lab_socket_path()
     config_path = home / '.colima/_lima/colima-lab/lima.yaml'
     if not isinstance(host, str) or not host.startswith('unix:///'):
         raise ValueError('Dedicated absolute Unix socket required')
