@@ -59,6 +59,13 @@ conversational-agent acceptance. No model provider, production host or private
 records are involved. Knowledge Steward remains independently useful beside the
 other applications. A repository is the code home; deployment is separate.
 
+## Read the lab's health
+
+[Lab doctor](docs/lab-doctor.md) gives a dated, read-only report of supported
+service availability, guest storage and known/unknown/stale recovery evidence.
+It offers plain next guidance, with optional details or JSON. No login, model,
+automatic repair or current-backup guarantee is involved.
+
 ## Licence
 
 Original project code is licensed under **GPL-3.0-only**; see [LICENSE](LICENSE).
