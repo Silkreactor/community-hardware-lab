@@ -63,7 +63,9 @@ other applications. A repository is the code home; deployment is separate.
 
 [Lab doctor](docs/lab-doctor.md) gives a dated, read-only report of supported
 service availability, guest storage and known/unknown/stale recovery evidence.
-It offers plain next guidance, with optional details or JSON. No login, model,
+Run `./check-my-lab` in the prepared reference checkout; add `--details` for
+explanations. It reuses the verified local setup without asking for socket or
+engine details, and refuses missing or conflicting setup. JSON is also available. No login, model,
 automatic repair or current-backup guarantee is involved.
 
 ## Licence
