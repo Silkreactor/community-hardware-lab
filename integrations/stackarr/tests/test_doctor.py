@@ -1,5 +1,6 @@
 # SPDX-License-Identifier: GPL-3.0-only
 from datetime import datetime, timezone, timedelta
+import copy
 import hashlib
 import json
 from pathlib import Path
@@ -81,6 +82,8 @@ class DoctorTests(unittest.TestCase):
         self.assertEqual(result['services']['Service manager']['state'], 'stopped')
         self.assertEqual(result['services']['Media library']['state'], 'unavailable')
         self.assertEqual(result['storage']['state'], 'unknown')
+        self.assertEqual(result['next_actions'], doctor.next_actions(result))
+        self.assertEqual(len(commands), 4)
         self.assertTrue(all(c[3] in ('info', 'inspect') if c[0]=='docker' else c[-4:] == ['df','-Pk','/','/var/lib/docker'] for c in commands))
 
     def test_unsafe_port_skips_http_probe(self):
@@ -94,6 +97,83 @@ class DoctorTests(unittest.TestCase):
             result=doctor.report('unix:///fixture','test')
         http.assert_not_called()
         self.assertEqual(result['services']['Media library']['state'],'unknown')
+
+
+class NextActionTests(unittest.TestCase):
+    def sample(self, lab='known', storage='known', backup='recorded', manager='running', media='responding'):
+        return {'observed_at': 'fixture', 'scope': 'Labelled fixture',
+                'lab': doctor.finding(lab, 'Fixture lab', ''),
+                'storage': doctor.finding(storage, 'Fixture storage', ''),
+                'backup': doctor.finding(backup, 'Fixture backup', ''),
+                'services': {'Service manager': doctor.finding(manager, 'Fixture manager', ''),
+                             'Media library': doctor.finding(media, 'Fixture media', '')}}
+
+    def test_mixed_states_are_prioritized_independent_of_input_order(self):
+        result = self.sample(storage='low', backup='stale', manager='stopped', media='unavailable')
+        expected = ['review-storage', 'refresh-recovery-check', 'recheck-media-library', 'confirm-service-manager']
+        actions = doctor.next_actions(result)
+        self.assertEqual([a['id'] for a in actions], expected)
+        self.assertEqual([a['priority'] for a in actions], [10, 20, 40, 50])
+        result['services'] = dict(reversed(list(result['services'].items())))
+        self.assertEqual(doctor.next_actions(result), actions)
+        plain = doctor.render(result)
+        positions = [plain.index(a['action']) for a in actions]
+        self.assertEqual(positions, sorted(positions))
+        self.assertIn('intentionally stopped', actions[-1]['action'])
+
+    def test_unverified_lab_suppresses_even_contradictory_service_storage_diagnosis(self):
+        for state in ('unknown', 'unexpected', None):
+            result = self.sample(lab=state, storage='low', backup='stale', manager='stopped', media='unavailable')
+            actions = doctor.next_actions(result)
+            self.assertEqual([a['id'] for a in actions], ['verify-lab', 'refresh-recovery-check'])
+            self.assertNotIn('low on space', json.dumps(actions))
+            self.assertNotIn('intentionally stopped', json.dumps(actions))
+            self.assertIn('not verified', actions[-1]['reason'])
+
+    def test_unknown_measurements_and_stable_service_ties(self):
+        actions = doctor.next_actions(self.sample(storage='unknown', backup='unknown', manager='unknown', media='unknown'))
+        self.assertEqual([a['id'] for a in actions], ['verify-recovery', 'verify-storage', 'verify-service-manager', 'verify-media-library'])
+        self.assertEqual(actions[2]['priority'], actions[3]['priority'])
+        self.assertIn('unknown', actions[1]['reason'])
+        minimal = doctor.next_actions({})
+        self.assertEqual([a['id'] for a in minimal], ['verify-lab', 'verify-recovery'])
+
+    def test_recovery_never_becomes_current_protection_even_with_healthy_services(self):
+        for state, code in [('recorded', 'review-current-recovery'), ('stale', 'refresh-recovery-check'),
+                            ('unknown', 'verify-recovery'), ('unsupported', 'verify-recovery')]:
+            actions = doctor.next_actions(self.sample(backup=state))
+            self.assertEqual([a['id'] for a in actions], [code])
+            self.assertTrue('not verified' in actions[0]['reason'] or 'unknown' in actions[0]['reason'])
+
+    def test_helper_pure_private_text_not_copied_and_results_not_shared(self):
+        result = self.sample(storage='low', backup='stale', manager='stopped')
+        secret = '/private/client TOKEN=secret unix:///socket'
+        result['services'][secret] = doctor.finding('unavailable', secret, secret)
+        result['storage']['summary'] = secret
+        result['backup']['guidance'] = secret
+        result['engine_id'] = secret
+        before = copy.deepcopy(result)
+        with patch('doctor.subprocess.check_output', side_effect=AssertionError('extra command')), \
+             patch('doctor.validate_isolation', side_effect=AssertionError('extra probe')), \
+             patch('doctor.public_jellyfin', side_effect=AssertionError('extra network')), \
+             patch('builtins.open', side_effect=AssertionError('extra file access')):
+            actions = doctor.next_actions(result)
+        self.assertEqual(result, before)
+        self.assertNotIn(secret, json.dumps(actions))
+        actions[0]['action'] = 'changed output'
+        self.assertNotEqual(doctor.next_actions(result), actions)
+
+    def test_report_json_and_plain_guidance_share_actions_without_extra_commands(self):
+        with patch('doctor.validate_isolation', side_effect=ValueError('private')), \
+             patch('doctor.subprocess.check_output') as commands, patch('doctor.public_jellyfin') as http:
+            result = doctor.report('unix:///fixture', 'test')
+        commands.assert_not_called()
+        http.assert_not_called()
+        self.assertEqual(result['next_actions'], doctor.next_actions(result))
+        self.assertEqual(json.loads(json.dumps(result))['next_actions'], result['next_actions'])
+        for action in result['next_actions']:
+            self.assertIn(action['action'], doctor.render(result))
+            self.assertIn(action['reason'], doctor.render(result, details=True))
 
 
 if __name__ == '__main__':
