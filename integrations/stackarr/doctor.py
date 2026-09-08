@@ -121,6 +121,7 @@ def report(host, engine_id, evidence=None):
         result['lab'] = finding('unknown', 'The isolated lab cannot be verified.', 'It may be suspended or inaccessible. Ask its operator to check the isolated lab; this report will not start it.')
         for name in ('Service manager', 'Media library'):
             result['services'][name] = finding('unknown', 'Not checked because the lab could not be verified.', 'Verify the lab connection first.')
+        result['next_actions'] = next_actions(result)
         return result
 
     for name, container, image in [('Service manager', 'lab-stackarr', STACKARR), ('Media library', 'lab-media', JELLYFIN)]:
@@ -151,11 +152,68 @@ def report(host, engine_id, evidence=None):
         result['storage'] = storage_result(command(['colima', 'ssh', '--profile', 'lab', '--', 'env', 'LC_ALL=C', 'df', '-Pk', '/', '/var/lib/docker']))
     except (OSError, ValueError, subprocess.SubprocessError):
         pass
+    result['next_actions'] = next_actions(result)
     return result
+
+
+def next_actions(result):
+    """Prioritize existing observations only; fixed text, no I/O or mutation.
+
+    Lower priority numbers come first. Service order breaks equal-priority ties.
+    Recovery evidence never establishes protection of current data.
+    """
+    actions = []
+
+    def add(code, priority, action, reason):
+        actions.append({'id': code, 'priority': priority, 'action': action, 'reason': reason})
+
+    verified = result.get('lab', {}).get('state') == 'known'
+    if not verified:
+        add('verify-lab', 0, 'Ask the operator to verify the lab connection first.',
+            'The lab may be suspended or inaccessible. Service and storage problems cannot be diagnosed from this check.')
+    else:
+        storage = result.get('storage', {}).get('state')
+        if storage == 'low':
+            add('review-storage', 10, 'Pause adding data and ask the operator to review storage.',
+                'At least one checked guest filesystem is low on space. Do not delete data based on this report.')
+        elif storage != 'known':
+            add('verify-storage', 30, 'Ask the operator to check available storage before adding data.',
+                'Storage is unknown; this does not mean the disk is empty or full.')
+
+        # Only supported friendly names become output; never echo arbitrary keys.
+        for name, key, healthy in (('Service manager', 'service-manager', 'running'),
+                                   ('Media library', 'media-library', 'responding')):
+            state = result.get('services', {}).get(name, {}).get('state')
+            if state == 'unavailable':
+                add('recheck-' + key, 40, f'Check {name.lower()} again later; ask the operator if it remains unavailable.',
+                    'It may still be starting. This check does not establish the cause or authorize a repair.')
+            elif state == 'stopped':
+                add('confirm-' + key, 50, f'Ask whether {name.lower()} is intentionally stopped.',
+                    'A stopped service may be expected. No restart is recommended without that context.')
+            elif state != healthy:
+                add('verify-' + key, 45, f'Ask the operator to verify {name.lower()} availability.',
+                    'Availability is unknown; a failure or its cause has not been established.')
+
+    backup = result.get('backup', {}).get('state')
+    if backup == 'recorded':
+        add('review-current-recovery', 20, 'Ask the operator to check recovery coverage for current data.',
+            'The recent record covers an earlier sample library only; new changes and off-machine copies are not verified.')
+    elif backup == 'stale':
+        add('refresh-recovery-check', 20, 'Arrange a current recovery check and confirm another copy of important data.',
+            'The matching recovery record is older than the trial freshness limit. Current protection is not verified.')
+    else:
+        add('verify-recovery', 20, 'Confirm another copy of important data and arrange a recovery check.',
+            'Backup protection is unknown. This report did not create or test a backup.')
+    return sorted(actions, key=lambda action: action['priority'])
 
 
 def render(result, details=False):
     lines = ['Lab doctor — ' + result['observed_at'], result['scope'], '', result['lab']['summary']]
+    lines.extend(['', 'What to do next (in order):'])
+    for number, action in enumerate(next_actions(result), 1):
+        lines.append(f'{number}. {action["action"]}')
+        if details:
+            lines.append('   ' + action['reason'])
     for label, item in [*result['services'].items(), ('Storage', result['storage']), ('Backup evidence', result['backup'])]:
         lines.extend(['', f'{label} [{item["state"]}]: {item["summary"]}'])
         if details or label == 'Backup evidence' or item['state'] in ('unknown', 'low', 'stopped', 'unavailable'):

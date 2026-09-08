@@ -68,6 +68,27 @@ setup/VM decisions; explicit invocation does not authorize another deployment.
   The checks cover guest system/service storage, not the physical Mac disk, disk
   reliability, removable media, every mount or space reservation by other software.
 
+## What to do next
+
+The report starts with a short ordered action list derived only from the same
+observations. Nothing in the list executes a command or grants repair authority.
+When the lab cannot be verified, connection verification comes first and service
+or storage diagnosis is suppressed in the action list. The underlying findings
+remain visible, including unknown measurements and dated backup evidence.
+
+For a verified lab, low storage comes first: pause adding data and ask the operator
+to review it. Recovery coverage comes next, then unknown storage, unavailable or
+unknown services, and confirmation of intentionally stopped services. No restart
+or deletion is suggested as an automatic response. Running/responding checks do
+not add a repair action. Even with those results, recent recovery evidence still
+requires checking coverage for current data; it is never reported as protection.
+
+`--details` explains each action. JSON adds `next_actions`, an ordered array with
+stable `id`, numeric `priority` (lower comes first), `action` and `reason` fields.
+Equal priorities use the fixed service-manager then media-library order. This is
+an advisory trial ordering, not a diagnosis of urgency or a new monitoring system.
+Existing observations and exit-code meanings are unchanged.
+
 ## Backup evidence is separate from current protection
 
 The shortcut supplies its already-reviewed reference to the same backup checker.
@@ -108,8 +129,8 @@ Run the full integration regression suite with:
 PYTHONPATH=integrations/stackarr .runtime/venv/bin/python -m unittest discover -s integrations/stackarr/tests -v
 ```
 
-The prior integration and data remain unchanged. Rollback is to the previously
-accepted doctor baseline `61e6ec2d015919c136bee6c70b34cc73cf84794d` code; the report has no scheduled
+The prior integration and data remain unchanged. Rollback for the next-action candidate is to the accepted
+shortcut baseline `c80e5f6f36eb18a6956f09349378349fcf69a712` code; the report has no scheduled
 process to stop and makes no persistent application changes.
 
 ### Recorded result — 6 September 2026
@@ -139,3 +160,14 @@ suspended invocation correctly reported unknown without starting the lab.
 The integration suite passes31 tests (the prior23 plus8 shortcut tests), alongside
 12 onboarding tests. Invalid setup and missing dependencies use labelled fixtures;
 no real saved setup was edited. The accepted doctor/guard remain the checker.
+
+### Next-action candidate validation — 8 September 2026
+
+The actual shortcut ran in plain, detailed and JSON modes from another working
+directory while the existing lab was suspended. All returned exit2, with lab
+verification first and stale recovery evidence kept separate. Both VM profiles
+stayed stopped, the loopback port stayed closed, the disk remained present and
+reference/archive hashes matched before and after. No VM was started for this
+candidate; running/low-space/mixed-state action ordering uses labelled fixtures.
+The integration suite passes37 tests, with12 onboarding tests. This adds advisory
+text only; no new probe, repair or host/client change is introduced.
